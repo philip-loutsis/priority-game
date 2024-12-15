@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Priority Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .hidden { display: none; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .priority-card { padding: 10px; border: 1px solid #ccc; text-align: center; cursor: pointer; border-radius: 5px; }
+    .selected { background-color: #4caf50; color: white; }
+    .center { text-align: center; margin-top: 20px; }
+    button { padding: 10px 20px; margin: 10px; cursor: pointer; border-radius: 5px; }
+    .add-priority { margin-top: 20px; }
+    .icon { width: 30px; height: 30px; margin-right: 10px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div id="stage1">
+    <h2>Select Your Priorities</h2>
+    <p>Click on the priorities that matter to you most. Then click "Proceed" to rank them.</p>
+    <div class="grid" id="priorityGrid">
+      <div class="priority-card" data-priority="Health">Health</div>
+      <div class="priority-card" data-priority="Career">Career</div>
+      <div class="priority-card" data-priority="Family">Family</div>
+      <div class="priority-card" data-priority="Travel">Travel</div>
+      <div class="priority-card" data-priority="Fitness">Fitness</div>
+      <div class="priority-card" data-priority="Hobbies">Hobbies</div>
+      <div class="priority-card" data-priority="Wealth">Wealth</div>
+      <div class="priority-card" data-priority="Friendships">Friendships</div>
+      <div class="priority-card" data-priority="Education">Education</div>
+      <div class="priority-card" data-priority="Creativity">Creativity</div>
+      <div class="priority-card" data-priority="Adventure">Adventure</div>
+      <div class="priority-card" data-priority="Environment">Environment</div>
+      <div class="priority-card" data-priority="Spirituality">Spirituality</div>
+      <div class="priority-card" data-priority="Community">Community</div>
+      <div class="priority-card" data-priority="Relaxation">Relaxation</div>
+    </div>
+    <div class="add-priority">
+      <input type="text" id="customPriority" placeholder="Add your own priority" />
+      <button id="addPriorityBtn">Add</button>
+    </div>
+    <div class="center">
+      <button id="proceedBtn" disabled>Proceed</button>
+    </div>
+  </div>
+
+  <div id="stage2" class="hidden">
+    <h2>Which is More Important?</h2>
+    <p id="progress">1/1 comparisons completed</p>
+    <div class="center">
+      <button id="chooseA" style="margin-right: 20px"><span id="pairA"></span></button>
+      <button id="chooseB"><span id="pairB"></span></button>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <h2>Your Priority Rankings</h2>
+    <canvas id="resultsBarChart" width="400" height="200"></canvas>
+    <canvas id="resultsPieChart" width="400" height="200"></canvas>
+    <div id="priorityList" style="margin-top: 20px;"></div>
+    <div class="center">
+      <button onclick="location.reload()">Restart</button>
+    </div>
+  </div>
+
+  <script>
+    const stage1 = document.getElementById('stage1');
+    const stage2 = document.getElementById('stage2');
+    const results = document.getElementById('results');
+
+    const priorityGrid = document.getElementById('priorityGrid');
+    const proceedBtn = document.getElementById('proceedBtn');
+    const addPriorityBtn = document.getElementById('addPriorityBtn');
+    const customPriorityInput = document.getElementById('customPriority');
+
+    const selectedPriorities = [];
+
+    function createPriorityCard(priority) {
+      const card = document.createElement('div');
+      card.classList.add('priority-card');
+      card.setAttribute('data-priority', priority);
+      card.innerText = priority;
+      card.addEventListener('click', () => {
+        if (selectedPriorities.includes(priority)) {
+          selectedPriorities.splice(selectedPriorities.indexOf(priority), 1);
+          card.classList.remove('selected');
+        } else {
+          selectedPriorities.push(priority);
+          card.classList.add('selected');
+        }
+        proceedBtn.disabled = selectedPriorities.length < 2; // Enable only if 2 or more selected
+      });
+      priorityGrid.appendChild(card);
+    }
+
+    addPriorityBtn.addEventListener('click', () => {
+      const customPriority = customPriorityInput.value.trim();
+      if (customPriority && !selectedPriorities.includes(customPriority)) {
+        createPriorityCard(customPriority);
+        customPriorityInput.value = '';
+      }
+    });
+
+    document.querySelectorAll('.priority-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const priority = card.getAttribute('data-priority');
+        if (selectedPriorities.includes(priority)) {
+          selectedPriorities.splice(selectedPriorities.indexOf(priority), 1);
+          card.classList.remove('selected');
+        } else {
+          selectedPriorities.push(priority);
+          card.classList.add('selected');
+        }
+        proceedBtn.disabled = selectedPriorities.length < 2; // Enable only if 2 or more selected
+      });
+    });
+
+    proceedBtn.addEventListener('click', () => {
+      stage1.classList.add('hidden');
+      startPairwiseComparisons();
+    });
+
+    // Stage 2: Pairwise Comparisons
+    const pairA = document.getElementById('pairA');
+    const pairB = document.getElementById('pairB');
+    const chooseA = document.getElementById('chooseA');
+    const chooseB = document.getElementById('chooseB');
+    const progress = document.getElementById('progress');
+
+    let pairs = [];
+    const scores = {};
+    let currentIndex = 0;
+
+    function startPairwiseComparisons() {
+      selectedPriorities.forEach(priority => (scores[priority] = 0));
+      for (let i = 0; i < selectedPriorities.length; i++) {
+        for (let j = i + 1; j < selectedPriorities.length; j++) {
+          pairs.push([selectedPriorities[i], selectedPriorities[j]]);
+        }
+      }
+      progress.innerText = `1/${pairs.length} comparisons completed`;
+      displayPair();
+      stage2.classList.remove('hidden');
+    }
+
+    function displayPair() {
+      const [optionA, optionB] = pairs[currentIndex];
+      pairA.innerText = optionA;
+      pairB.innerText = optionB;
+    }
+
+    function updateScores(choice) {
+      const [optionA, optionB] = pairs[currentIndex];
+      scores[choice]++;
+      currentIndex++;
+      if (currentIndex >= pairs.length) {
+        showResults();
+      } else {
+        progress.innerText = `${currentIndex + 1}/${pairs.length} comparisons completed`;
+        displayPair();
+      }
+    }
+
+    chooseA.addEventListener('click', () => updateScores(pairs[currentIndex][0]));
+    chooseB.addEventListener('click', () => updateScores(pairs[currentIndex][1]));
+
+    // Stage 3: Results Visualization
+    function showResults() {
+      stage2.classList.add('hidden');
+
+      // Sort scores in descending order
+      const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+      const labels = sortedScores.map(entry => entry[0]);
+      const data = sortedScores.map(entry => entry[1]);
+
+      // Generate colors
+      const colors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 50%)`);
+
+      // Bar Chart
+      const barCtx = document.getElementById('resultsBarChart').getContext('2d');
+      new Chart(barCtx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Priority Scores',
+            data,
+            backgroundColor: colors,
+            borderColor: colors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+
+      // Pie Chart
+      const pieCtx = document.getElementById('resultsPieChart').getContext('2d');
+      new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors
+          }]
+        },
+        options: {
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                  const value = context.raw;
+                  const percentage = ((value / total) * 100).toFixed(2);
+                  return `${context.label}: ${value} (${percentage}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Priority List
+      const priorityList = document.getElementById('priorityList');
+      const listHtml = sortedScores.map(entry => `<p>${entry[0]}: ${entry[1]}</p>`).join('');
+      priorityList.innerHTML = `<h3>Priorities (Highest to Lowest)</h3>${listHtml}`;
+
+      results.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
